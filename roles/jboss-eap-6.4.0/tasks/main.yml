@@ -1,0 +1,124 @@
+---
+- name: Install packages
+  apt:
+    name: "{{ packages }}"
+  vars:
+    packages:
+    - openjdk-8-jdk
+    - unzip
+
+- name: add group "jboss-as"
+  group: name=jboss-as state=present
+
+- name: allow 'jboss-as' group to have passwordless sudo
+  lineinfile:
+    dest: /etc/sudoers
+    state: present
+    regexp: '^%jboss-as'
+    line: '%jboss-as ALL=(ALL) NOPASSWD: ALL'
+    validate: 'visudo -cf %s'
+
+- name: add user "jboss-as"
+  user: name=jboss-as groups=jboss-as append=yes state=present home=/home/jboss-as createhome=yes shell=/bin/bash
+
+- name: create .ssh for "jboss-as" user
+  file: path=/home/jboss-as/.ssh owner=jboss-as group=jboss-as state=directory mode=0700
+
+- name: set authorized key taken from file for jboss-as user
+  authorized_key:
+    user: jboss-as
+    state: present
+    key: "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDRwS/0sAAs6VrJ+Kd4iv2HJ96Cqrm1omibyrDipycJWz/HD5feVw8cUqYX6vX6ReHt8BYhERVnSc/Jsf54FEOKUY9Z+zw3zWXsLAfcAewdaueof9+HbhqIilhOeKRhJ27LPlsdHvCODlP9FIq4kC1F/OvEvSpfXt0Ssu+PEUeyKFT3UGrmRoJeS9+TR/BQnL+1+ywt+Ifvm5SzeKDpw6AuhKGQoOJh4g7C5OYRgm0I2HnSAHOtq2S8g4kwZ7kiWEWVt7/PFdcR6URnNqKhSPrASPJY040oIxrCZ0IjtpP0cr6n9Owm2M4Iu/PceQVkjRGx0B8SxJs8/2CtOAFFCTmF jcla@kubuntu"
+
+- name: Extract jboss-eap-6.4.0.zip into /opt
+  unarchive:
+    src: jboss-eap-6.4.0.zip
+    dest: /opt
+    creates: /opt/jboss-eap-6.4
+    
+- name: Change ownership of JBoss installation
+  file: path=/opt/jboss-eap-6.4 owner=jboss-as group=jboss-as state=directory recurse=yes
+
+- name: Copy management user and password
+  copy:
+    src: "{{item.src}}"
+    dest: "{{item.dest}}"
+    owner: jboss-as
+    group: jboss-as
+    mode: 0600
+  with_items:
+    - { src: mgmt-users.properties, dest: /opt/jboss-eap-6.4/standalone/configuration }
+    - { src: mgmt-users.properties, dest: /opt/jboss-eap-6.4/domain/configuration }
+    - { src: mgmt-groups.properties, dest: /opt/jboss-eap-6.4/standalone/configuration }
+    - { src: mgmt-groups.properties, dest: /opt/jboss-eap-6.4/domain/configuration }
+
+- name: Copy standalone and domain configuration
+  copy:
+    src: "{{item.src}}"
+    dest: "{{item.dest}}"
+    owner: jboss-as
+    group: jboss-as
+    mode: 0664
+  with_items:
+    - { src: standalone.xml, dest: /opt/jboss-eap-6.4/standalone/configuration }
+    - { src: domain.xml, dest: /opt/jboss-eap-6.4/domain/configuration }
+    - { src: host.xml, dest: /opt/jboss-eap-6.4/domain/configuration }
+    - { src: host-master.xml, dest: /opt/jboss-eap-6.4/domain/configuration }
+
+- name: Configure host-slave per server
+  template: src=host-slave.xml.j2 dest=/opt/jboss-eap-6.4/domain/configuration/host-slave.xml
+
+- name: Creates directory for datasource driver
+  file:
+    path: /opt/jboss-eap-6.4/modules/org/postgresql/main
+    state: directory
+    owner: jboss-as
+    group: jboss-as
+
+- name: Copy postgresql driver and module.xml
+  copy:
+    src: "{{item.src}}"
+    dest: "{{item.dest}}"
+    owner: jboss-as
+    group: jboss-as
+  with_items:
+    - { src: postgresql-42.2.5.jar, dest: /opt/jboss-eap-6.4/modules/org/postgresql/main }
+    - { src: module.xml, dest: /opt/jboss-eap-6.4/modules/org/postgresql/main }
+
+#- name: Install Tomcat init script
+  #copy: src=tomcat.service dest=/etc/systemd/system/tomcat.service mode=0755
+
+#- name: Install context.xml in host-manager
+  #copy: src=context.xml dest=/opt/apache-tomcat-8.5.8/webapps/host-manager/META-INF/context.xml mode=0640
+  #notify: restart tomcat
+
+#- name: Install context.xml in manager
+  #copy: src=context.xml dest=/opt/apache-tomcat-8.5.8/webapps/manager/META-INF/context.xml mode=0640
+  #notify: restart tomcat
+
+#- name: Install axis2 war
+  #copy: src=axis2.war dest=/opt/apache-tomcat-8.5.8/webapps/axis2.war mode=0644
+
+#- name: systemd daemon-reload
+  #shell: systemctl daemon-reload
+
+#- name: tomcat-8-start
+  #service: name=tomcat state=started enabled=yes
+
+#- name: Configure Tomcat users
+  #template: src=tomcat-users.xml.j2 dest=/opt/apache-tomcat-8.5.8/conf/tomcat-users.xml
+  #notify: restart tomcat
+
+# - name: Configure Tomcat server
+#   template: src=server.xml dest=/usr/share/tomcat/conf/
+#   notify: restart tomcat
+
+# - name: Configure Tomcat users
+#   template: src=tomcat-users.xml dest=/usr/share/tomcat/conf/
+#   notify: restart tomcat
+
+
+
+
+# - name: wait for tomcat to start
+#   wait_for: port={{http_port}}

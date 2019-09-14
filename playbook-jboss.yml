@@ -1,0 +1,71 @@
+---
+- hosts:
+    - domain-controller
+    - jboss-slave-1
+    - jboss-slave-2
+  become: yes
+  tasks:
+  - name: Ensure NTP (for time synchronization) is installed.
+    apt: name=ntp state=present
+  - name: Ensure NTP is running.
+    service: name=ntp state=started enabled=yes
+
+  roles:  
+    - { role: jboss-eap-6.4.0 }
+
+- hosts:
+    - domain-controller
+  become: yes
+  roles:
+    - { role: apache2 }
+  tasks:
+  - name: Instalacion mod_jk
+    apt: name=libapache2-mod-jk state=present
+  - name: Creates directory for configuration
+    file:
+      path: /etc/jboss-as
+      state: directory
+      # owner: jboss-as
+      # group: jboss-as
+  - name: Copy jboss-as.conf to /etc/jboss-as directory
+    copy:
+      src: roles/jboss-eap-6.4.0/files/jboss-as-domain.conf
+      dest: /etc/jboss-as/jboss-as.conf
+      # owner: jboss-as
+      # group: jboss-as
+  - name: Copy jboss-as-domain.sh to /etc/init.d directory
+    copy:
+      src: roles/jboss-eap-6.4.0/files/jboss-as-domain.sh
+      dest: /etc/init.d/jboss
+      mode: 0755
+      # owner: jboss-as
+      # group: jboss-as
+  - name: update-rc.d jboss defaults
+    shell: update-rc.d jboss defaults
+  - name: systemctl daemon-reload
+    shell: systemctl daemon-reload
+
+- hosts:
+    - jboss-slave-1
+    - jboss-slave-2
+  become: yes
+  tasks:
+  - name: Creates directory for configuration
+    file:
+      path: /etc/jboss-as
+      state: directory
+  - name: Copy jboss-as.conf to /etc/jboss-as directory
+    copy:
+      src: roles/jboss-eap-6.4.0/files/jboss-as-slave.conf
+      dest: /etc/jboss-as/jboss-as.conf
+  - name: Copy jboss-as-domain.sh to /etc/init.d directory
+    copy:
+      src: roles/jboss-eap-6.4.0/files/jboss-as-domain.sh
+      dest: /etc/init.d/jboss
+      mode: 0755
+  - name: update-rc.d jboss defaults
+    shell: update-rc.d jboss defaults
+  - name: systemctl daemon-reload
+    shell: systemctl daemon-reload
+  - name: jboss started
+    service: name=jboss state=started enabled=yes
