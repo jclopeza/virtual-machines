@@ -10,3 +10,4 @@
   roles:  
     - { role: tomcat8 }
     - { role: mysql }
+    - { role: apache2 }

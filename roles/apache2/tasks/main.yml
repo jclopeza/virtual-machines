@@ -5,3 +5,12 @@
   vars:
     packages:
     - apache2
+
+- name: Start the Apache2 service
+  service: name=apache2 state=started enabled=yes
+
+- name: Change ownership of Apache2 installation
+  file: path=/var/www owner=tomcat group=tomcat state=directory recurse=yes
+
+- name: Change ownership of Apache2 installation
+  file: path=/etc/apache2/sites-enabled owner=tomcat group=tomcat state=directory recurse=yes
